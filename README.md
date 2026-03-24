@@ -2,16 +2,27 @@
 
 macOS 版 OpenClaw 管理脚本（kejilion 风格复刻增强版）。
 
-## 文件
+## 快速开始
 
-- `openclaw-macos-kejilion-rebuild.sh`
+### 一键安装 / 运行
 
-## 用法
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/mjj0001/macosscript/main/scripts/install.sh)
+```
+
+### 本地运行
 
 ```bash
 chmod +x openclaw-macos-kejilion-rebuild.sh
 ./openclaw-macos-kejilion-rebuild.sh
 ```
+
+## 项目结构
+
+- `openclaw-macos-kejilion-rebuild.sh` - 主脚本
+- `scripts/install.sh` - 一键安装入口
+- `docs/USAGE.md` - 使用说明
+- `LICENSE` - MIT 许可
 
 ## 功能
 
