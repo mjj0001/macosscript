@@ -166,13 +166,6 @@ except: pass
   cecho "✅ 已回滚到版本: $target_version"
   press_enter
 }
-  # 重置命令检测（可能版本间 CLI 名称不同）
-  OC_CMD=""
-  detect_oc_cmd
-  restart_gateway || true
-  cecho "✅ 已回滚到版本: $target_version"
-  press_enter
-}
 extract_dashboard_url(){ detect_oc_cmd; $OC_CMD dashboard 2>/dev/null | grep -Eo 'http://[^ ]+|https://[^ ]+' | head -n 1 || true; }
 extract_dashboard_token(){ extract_dashboard_url | sed -n 's/.*#token=//p' | head -n 1; }
 webui_add_origin(){ step "添加 WebUI origin"; read -r -p "输入 origin：" origin; [[ -n "$origin" ]] || return 0; python3 - "$OPENCLAW_CONFIG_FILE" "$origin" <<'PY'
