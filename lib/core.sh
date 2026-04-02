@@ -123,7 +123,13 @@ update_script(){
     cecho "📡 正在检查更新..."
     cd "$SCRIPT_DIR"
     local remote_version
-    remote_version=$(git ls-remote --heads origin main 2>/dev/null | head -1 | cut -f1)
+    remote_version=$(git ls-remote --heads origin main 2>/dev/null | head -1 | cut -f1) &
+    local git_pid=$!
+    (sleep 15 && kill $git_pid 2>/dev/null) &
+    local wait_pid=$!
+    wait $git_pid 2>/dev/null
+    kill $wait_pid 2>/dev/null
+    wait $wait_pid 2>/dev/null
     local local_version
     local_version=$(git rev-parse HEAD 2>/dev/null)
 
