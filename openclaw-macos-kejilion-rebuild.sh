@@ -20,6 +20,10 @@ source "$SCRIPT_DIR/lib/bot.sh"
 source "$SCRIPT_DIR/lib/plugin.sh"
 # shellcheck source=lib/skill.sh
 source "$SCRIPT_DIR/lib/skill.sh"
+# shellcheck source=lib/logs.sh
+source "$SCRIPT_DIR/lib/logs.sh"
+# shellcheck source=lib/config.sh
+source "$SCRIPT_DIR/lib/config.sh"
 
 # --- 启动信息头 ---
 show_header(){

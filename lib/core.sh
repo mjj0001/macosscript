@@ -23,7 +23,10 @@ stop_gateway(){
   need_cmd "$OC_CMD"
   if [[ -f "$LAUNCH_AGENT_PLIST" ]]; then
     launchctl unload "$LAUNCH_AGENT_PLIST" >/dev/null 2>&1 || true
-    cecho "✅ Gateway 已通过 launchctl 停止"
+    sleep 2
+    pkill -f "openclaw.*gateway" 2>/dev/null || true
+    pkill -f "clawd.*gateway" 2>/dev/null || true
+    cecho "✅ Gateway 已停止"
   else
     $OC_CMD gateway stop 2>/dev/null || true
     pkill -f "$OC_CMD.*gateway" 2>/dev/null || true
