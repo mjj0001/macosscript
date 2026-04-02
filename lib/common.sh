@@ -11,6 +11,7 @@ BACKUP_DIR="${OPENCLAW_HOME}/backups"
 LAUNCH_AGENT_PLIST="${HOME}/Library/LaunchAgents/ai.openclaw.gateway.plist"
 LAST_ERROR_STEP="初始化"
 TEST_MODE="${OPENCLAW_TEST_MODE:-0}"
+SCRIPT_SETTINGS_FILE="${HOME}/.openclaw-macos-script-settings"
 
 cecho(){ printf '%s\n' "$*"; }
 warn(){ printf '⚠️ %s\n' "$*"; }
@@ -19,6 +20,134 @@ press_enter(){ read -r -p "按回车继续..." _; }
 need_cmd(){ command -v "$1" >/dev/null 2>&1 || die "缺少命令: $1"; }
 step(){ LAST_ERROR_STEP="$1"; }
 trap 'rc=$?; if [ $rc -ne 0 ]; then printf "\n❌ 失败步骤：%s\n" "$LAST_ERROR_STEP" >&2; printf "💡 建议先看上方报错，再决定重试哪一步。\n" >&2; fi' ERR
+
+# --- 首次运行设置向导 ---
+first_run_setup(){
+  [[ -f "$SCRIPT_SETTINGS_FILE" ]] && return 0
+
+  clear
+  cecho "╔═══════════════════════════════════════════════════════════╗"
+  cecho "║  🎉 欢迎使用 OPENCLAW macOS 管理工具！                    ║"
+  cecho "╠═══════════════════════════════════════════════════════════╣"
+  cecho "║  首次运行，请设置一个快捷启动别名                        ║"
+  cecho "║  设置后，在任意终端输入别名即可启动脚本                    ║"
+  cecho "╚═══════════════════════════════════════════════════════════╝"
+  echo
+  cecho "💡 推荐别名示例："
+  cecho "   ocm  (OpenClaw Mac 的缩写)"
+  cecho "   oc   (简短好记)"
+  cecho "   claw (直观)"
+  echo
+  read -r -p "请输入你想要的快捷别名（留空跳过）：" alias_name
+
+  if [[ -n "$alias_name" ]]; then
+    # 验证别名只包含字母、数字、下划线、连字符
+    if [[ ! "$alias_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+      warn "别名只能包含字母、数字、下划线(_)、连字符(-)"
+      warn "已跳过设置，你之后可以手动配置"
+    else
+      local script_path
+      script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/openclaw-macos-kejilion-rebuild.sh"
+      local alias_line="alias ${alias_name}='${script_path}'"
+
+      # 检查是否已存在
+      if grep -q "alias ${alias_name}=" ~/.zshrc 2>/dev/null; then
+        warn "别名 '${alias_name}' 已存在于 ~/.zshrc，跳过添加"
+      else
+        echo "" >> ~/.zshrc
+        echo "# OpenClaw macOS 管理工具快捷启动" >> ~/.zshrc
+        echo "$alias_line" >> ~/.zshrc
+        cecho "✅ 已将 '${alias_name}' 添加到 ~/.zshrc"
+        cecho "   命令: $alias_line"
+        source ~/.zshrc 2>/dev/null || true
+      fi
+
+      # 保存设置
+      echo "alias=${alias_name}" > "$SCRIPT_SETTINGS_FILE"
+      echo "path=${script_path}" >> "$SCRIPT_SETTINGS_FILE"
+      echo
+      cecho "🎯 以后在任意终端输入 '${alias_name}' 即可启动！"
+    fi
+  else
+    cecho "已跳过设置，你之后可以在脚本菜单中配置快捷别名"
+  fi
+
+  echo
+  press_enter
+}
+
+# --- 快捷别名管理 ---
+alias_manage_menu(){
+  step "快捷别名管理"
+  while true; do
+    clear
+    cecho "======================================="
+    cecho "⌨️  快捷别名管理"
+    cecho "======================================="
+    if [[ -f "$SCRIPT_SETTINGS_FILE" ]]; then
+      local current_alias
+      current_alias=$(grep "^alias=" "$SCRIPT_SETTINGS_FILE" 2>/dev/null | cut -d= -f2)
+      cecho "当前别名: ${current_alias:-未设置}"
+    else
+      cecho "当前别名: 未设置"
+    fi
+    echo
+    cecho "1. 设置/修改别名"
+    cecho "2. 删除别名"
+    cecho "0. 返回"
+    read -r -p "请选择：" c
+    case "$c" in
+      1)
+        read -r -p "输入新别名（字母/数字/下划线/连字符）：" alias_name
+        [[ -n "$alias_name" ]] || { warn "别名不能为空"; press_enter; continue; }
+        if [[ ! "$alias_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+          warn "别名只能包含字母、数字、下划线(_)、连字符(-)"
+          press_enter; continue
+        fi
+        local script_path
+        script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/openclaw-macos-kejilion-rebuild.sh"
+        # 删除旧别名
+        if [[ -f "$SCRIPT_SETTINGS_FILE" ]]; then
+          local old_alias
+          old_alias=$(grep "^alias=" "$SCRIPT_SETTINGS_FILE" 2>/dev/null | cut -d= -f2)
+          if [[ -n "$old_alias" ]]; then
+            sed -i '' "/alias ${old_alias}=/d" ~/.zshrc 2>/dev/null || true
+            sed -i '' "/# OpenClaw macOS 管理工具快捷启动/d" ~/.zshrc 2>/dev/null || true
+          fi
+        fi
+        # 添加新别名
+        echo "" >> ~/.zshrc
+        echo "# OpenClaw macOS 管理工具快捷启动" >> ~/.zshrc
+        echo "alias ${alias_name}='${script_path}'" >> ~/.zshrc
+        echo "alias=${alias_name}" > "$SCRIPT_SETTINGS_FILE"
+        echo "path=${script_path}" >> "$SCRIPT_SETTINGS_FILE"
+        source ~/.zshrc 2>/dev/null || true
+        cecho "✅ 别名已设置为 '${alias_name}'"
+        press_enter
+        ;;
+      2)
+        if [[ -f "$SCRIPT_SETTINGS_FILE" ]]; then
+          local old_alias
+          old_alias=$(grep "^alias=" "$SCRIPT_SETTINGS_FILE" 2>/dev/null | cut -d= -f2)
+          if [[ -n "$old_alias" ]]; then
+            sed -i '' "/alias ${old_alias}=/d" ~/.zshrc 2>/dev/null || true
+            sed -i '' "/# OpenClaw macOS 管理工具快捷启动/d" ~/.zshrc 2>/dev/null || true
+            source ~/.zshrc 2>/dev/null || true
+            rm -f "$SCRIPT_SETTINGS_FILE"
+            cecho "✅ 已删除别名 '${old_alias}'"
+          else
+            warn "未设置别名"
+          fi
+        else
+          warn "未设置别名"
+        fi
+        press_enter
+        ;;
+      0) return 0 ;;
+      *) warn "无效选项"; sleep 1 ;;
+    esac
+  done
+}
 
 ensure_macos(){ step "检查系统"; if [[ "$TEST_MODE" == "1" ]]; then return 0; fi; [[ "$(uname -s)" == "Darwin" ]] || die "这个脚本只支持 macOS。"; }
 load_brew_env(){ [[ -x /opt/homebrew/bin/brew ]] && eval "$(/opt/homebrew/bin/brew shellenv)" || true; [[ -x /usr/local/bin/brew ]] && eval "$(/usr/local/bin/brew shellenv)" || true; }

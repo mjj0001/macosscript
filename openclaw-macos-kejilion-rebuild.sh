@@ -80,6 +80,7 @@ show_menu(){
   cecho "21. 卸载"
   cecho "22. 安装开机自启（launchctl）"
   cecho "23. 移除开机自启"
+  cecho "24. 快捷别名设置"
   cecho "0. 退出"
   cecho "--------------------"
 }
@@ -89,6 +90,7 @@ main(){
   load_brew_env
   ensure_openclaw_dirs
   ensure_openclaw_config
+  first_run_setup
   while true; do
     show_menu
     read -r -p "请输入选项并回车：" choice
@@ -116,6 +118,7 @@ main(){
       21) uninstall_openclaw ;;
       22) install_launch_agent; press_enter ;;
       23) remove_launch_agent; press_enter ;;
+      24) alias_manage_menu ;;
       0) exit 0 ;;
       *) warn "无效选项"; sleep 1 ;;
     esac
