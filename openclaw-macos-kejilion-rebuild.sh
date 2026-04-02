@@ -81,11 +81,12 @@ show_menu(){
   cecho "--------------------"
   cecho "19. 备份与还原"
   cecho "20. 更新 OpenClaw"
-  cecho "21. 卸载"
-  cecho "22. 安装开机自启"
-  cecho "23. 移除开机自启"
-  cecho "24. 快捷别名设置"
-  cecho "25. 更新脚本自身"
+  cecho "21. 版本回滚"
+  cecho "22. 卸载"
+  cecho "23. 安装开机自启"
+  cecho "24. 移除开机自启"
+  cecho "25. 快捷别名设置"
+  cecho "26. 更新脚本自身"
   cecho "0.  退出"
   cecho "--------------------"
 }
@@ -120,11 +121,12 @@ main(){
       18) multiagent_menu ;;
       19) backup_restore_menu ;;
       20) update_openclaw ;;
-      21) uninstall_openclaw ;;
-      22) install_launch_agent; press_enter ;;
-      23) remove_launch_agent; press_enter ;;
-      24) alias_manage_menu ;;
-      25) update_script ;;
+      21) rollback_openclaw ;;
+      22) uninstall_openclaw ;;
+      23) install_launch_agent; press_enter ;;
+      24) remove_launch_agent; press_enter ;;
+      25) alias_manage_menu ;;
+      26) update_script ;;
       0) exit 0 ;;
       *) warn "无效选项"; sleep 1 ;;
     esac

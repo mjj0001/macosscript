@@ -54,8 +54,109 @@ view_logs(){ step "查看日志"; detect_oc_cmd; need_cmd "$OC_CMD"; $OC_CMD sta
 change_model(){ step "切换模型"; detect_oc_cmd; need_cmd "$OC_CMD"; cecho "当前模型列表："; $OC_CMD models list || true; read -r -p "输入要切换的模型 ID（0 返回）：" m; [[ -z "$m" || "$m" == "0" ]] && return 0; $OC_CMD models set "$m"; cecho "✅ 已切换到：$m"; }
 run_onboard(){ step "运行配置向导"; detect_oc_cmd; need_cmd "$OC_CMD"; $OC_CMD onboard || true; }
 doctor_fix(){ step "健康检测"; detect_oc_cmd; need_cmd "$OC_CMD"; $OC_CMD doctor --fix || true; press_enter; }
-update_openclaw(){ step "更新 OpenClaw"; ensure_homebrew; install_dependencies; npm install -g "$OPENCLAW_NPM_PACKAGE"; restart_gateway || true; cecho "✅ 已更新 OpenClaw"; press_enter; }
+update_openclaw(){
+  step "更新 OpenClaw"
+  detect_oc_cmd
+  # 保存当前版本到历史
+  local current_version
+  current_version=$($OC_CMD --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[^ ]*' || echo "unknown")
+  if [[ "$current_version" != "unknown" ]]; then
+    if [[ ! -f "$VERSION_HISTORY_FILE" ]]; then
+      echo '[]' > "$VERSION_HISTORY_FILE"
+    fi
+    python3 - "$VERSION_HISTORY_FILE" "$current_version" <<'PY'
+import json,sys
+p,v=sys.argv[1:3]
+d=json.load(open(p,'r',encoding='utf-8'))
+from datetime import datetime
+d.append({'version':v,'timestamp':datetime.now().strftime('%Y-%m-%d %H:%M:%S')})
+d=d[-20:]
+json.dump(d,open(p,'w',encoding='utf-8'),ensure_ascii=False,indent=2)
+PY
+    cecho "📌 已保存当前版本 $current_version 到历史记录"
+  fi
+  ensure_homebrew
+  install_dependencies
+  npm install -g "$OPENCLAW_NPM_PACKAGE"
+  restart_gateway || true
+  cecho "✅ 已更新 OpenClaw"
+  press_enter
+}
 uninstall_openclaw(){ step "卸载 OpenClaw"; detect_oc_cmd; read -r -p "确认卸载输入 yes：" y; [[ "$y" == "yes" ]] || return 0; remove_launch_agent || true; $OC_CMD uninstall >/dev/null 2>&1 || true; npm uninstall -g openclaw >/dev/null 2>&1 || true; cecho "✅ 已卸载 npm 包，配置目录保留：$OPENCLAW_HOME"; press_enter; }
+
+# --- 版本回滚 ---
+rollback_openclaw(){
+  step "版本回滚"
+  clear
+  cecho "======================================="
+  cecho "⏪ 版本回滚"
+  cecho "======================================="
+  echo
+
+  if [[ ! -f "$VERSION_HISTORY_FILE" ]]; then
+    warn "暂无版本历史记录"
+    cecho "💡 更新 OpenClaw 后会自动保存版本历史"
+    press_enter
+    return 0
+  fi
+
+  local history_count
+  history_count=$(python3 - "$VERSION_HISTORY_FILE" <<'PY' 2>/dev/null || echo "0")
+import json
+d=json.load(open(__import__('sys').argv[1],'r',encoding='utf-8'))
+print(len(d))
+PY
+
+  if [[ "$history_count" == "0" ]]; then
+    warn "暂无版本历史记录"
+    press_enter
+    return 0
+  fi
+
+  cecho "📋 版本历史（最近 $history_count 个）："
+  echo
+  python3 - "$VERSION_HISTORY_FILE" <<'PY' 2>/dev/null || true
+import json
+d=json.load(open(__import__('sys').argv[1],'r',encoding='utf-8'))
+for i,v in enumerate(d[::-1]):
+    print(f"{i+1}. {v['version']}  ({v['timestamp']})")
+PY
+  echo
+  cecho "0. 返回"
+  echo
+
+  read -r -p "选择要回滚到的版本（输入序号）：" idx
+  [[ -z "$idx" || "$idx" == "0" ]] && return 0
+
+  local target_version
+  target_version=$(python3 - "$VERSION_HISTORY_FILE" "$idx" <<'PY' 2>/dev/null || echo "")
+import json,sys
+d=json.load(open(sys.argv[1],'r',encoding='utf-8'))
+i=int(sys.argv[2])-1
+d=d[::-1]
+if 0<=i<len(d): print(d[i]['version'])
+PY
+
+  if [[ -z "$target_version" ]]; then
+    warn "无效选项"
+    press_enter
+    return 0
+  fi
+
+  cecho "⚠️  将回滚到版本: $target_version"
+  read -r -p "确认回滚输入 yes：" confirm
+  [[ "$confirm" != "yes" ]] && { cecho "已取消"; press_enter; return 0; }
+
+  cecho "🔄 正在回滚..."
+  npm install -g "openclaw@$target_version" || {
+    warn "npm 安装失败，版本可能不存在"
+    press_enter
+    return 0
+  }
+  restart_gateway || true
+  cecho "✅ 已回滚到版本: $target_version"
+  press_enter
+}
 extract_dashboard_url(){ detect_oc_cmd; $OC_CMD dashboard 2>/dev/null | grep -Eo 'http://[^ ]+|https://[^ ]+' | head -n 1 || true; }
 extract_dashboard_token(){ extract_dashboard_url | sed -n 's/.*#token=//p' | head -n 1; }
 webui_add_origin(){ step "添加 WebUI origin"; read -r -p "输入 origin：" origin; [[ -n "$origin" ]] || return 0; python3 - "$OPENCLAW_CONFIG_FILE" "$origin" <<'PY'
