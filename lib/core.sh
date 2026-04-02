@@ -102,11 +102,11 @@ rollback_openclaw(){
   fi
 
   local history_count
-  history_count=$(python3 - "$VERSION_HISTORY_FILE" <<'PY' 2>/dev/null || echo "0")
-import json
-d=json.load(open(__import__('sys').argv[1],'r',encoding='utf-8'))
+  history_count=$(python3 -c "
+import json,sys
+d=json.load(open(sys.argv[1],'r',encoding='utf-8'))
 print(len(d))
-PY
+" "$VERSION_HISTORY_FILE" 2>/dev/null || echo "0")
 
   if [[ "$history_count" == "0" ]]; then
     warn "暂无版本历史记录"
@@ -116,12 +116,12 @@ PY
 
   cecho "📋 版本历史（最近 $history_count 个）："
   echo
-  python3 - "$VERSION_HISTORY_FILE" <<'PY' 2>/dev/null || true
-import json
-d=json.load(open(__import__('sys').argv[1],'r',encoding='utf-8'))
+  python3 -c "
+import json,sys
+d=json.load(open(sys.argv[1],'r',encoding='utf-8'))
 for i,v in enumerate(d[::-1]):
-    print(f"{i+1}. {v['version']}  ({v['timestamp']})")
-PY
+    print(f\"{i+1}. {v.get('version')}  ({v.get('timestamp')})\")
+" "$VERSION_HISTORY_FILE" 2>/dev/null || true
   echo
   cecho "0. 返回"
   echo
@@ -130,13 +130,13 @@ PY
   [[ -z "$idx" || "$idx" == "0" ]] && return 0
 
   local target_version
-  target_version=$(python3 - "$VERSION_HISTORY_FILE" "$idx" <<'PY' 2>/dev/null || echo "")
+  target_version=$(python3 -c "
 import json,sys
 d=json.load(open(sys.argv[1],'r',encoding='utf-8'))
 i=int(sys.argv[2])-1
 d=d[::-1]
 if 0<=i<len(d): print(d[i]['version'])
-PY
+" "$VERSION_HISTORY_FILE" "$idx" 2>/dev/null || echo "")
 
   if [[ -z "$target_version" ]]; then
     warn "无效选项"
@@ -149,15 +149,19 @@ PY
   [[ "$confirm" != "yes" ]] && { cecho "已取消"; press_enter; return 0; }
 
   cecho "🔄 正在回滚..."
-  # 停止当前服务
   stop_gateway || true
-  # 安装指定版本
   npm install -g "openclaw@$target_version" || {
     warn "npm 安装失败，版本可能不存在"
     restart_gateway || true
     press_enter
     return 0
   }
+  OC_CMD=""
+  detect_oc_cmd
+  restart_gateway || true
+  cecho "✅ 已回滚到版本: $target_version"
+  press_enter
+}
   # 重置命令检测（可能版本间 CLI 名称不同）
   OC_CMD=""
   detect_oc_cmd
