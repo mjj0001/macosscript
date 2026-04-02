@@ -21,6 +21,24 @@ need_cmd(){ command -v "$1" >/dev/null 2>&1 || die "缺少命令: $1"; }
 step(){ LAST_ERROR_STEP="$1"; }
 trap 'rc=$?; if [ $rc -ne 0 ]; then printf "\n❌ 失败步骤：%s\n" "$LAST_ERROR_STEP" >&2; printf "💡 建议先看上方报错，再决定重试哪一步。\n" >&2; fi' ERR
 
+# --- 获取永久脚本路径 ---
+get_permanent_script_path(){
+  local current_dir
+  current_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # 判断是否在临时目录（/var/folders 或 /tmp 开头）
+  if [[ "$current_dir" == /var/folders/* || "$current_dir" == /tmp/* ]]; then
+    # 需要安装到永久位置
+    local perm_dir="$HOME/macosscript"
+    if [[ -d "$perm_dir" ]]; then
+      echo "$perm_dir/openclaw-macos-kejilion-rebuild.sh"
+    else
+      echo ""
+    fi
+  else
+    echo "$current_dir/openclaw-macos-kejilion-rebuild.sh"
+  fi
+}
+
 # --- 首次运行设置向导 ---
 first_run_setup(){
   [[ -f "$SCRIPT_SETTINGS_FILE" ]] && return 0
@@ -47,7 +65,32 @@ first_run_setup(){
       warn "已跳过设置，你之后可以手动配置"
     else
       local script_path
-      script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/openclaw-macos-kejilion-rebuild.sh"
+      script_path="$(get_permanent_script_path)"
+
+      # 如果在临时目录运行，先安装到永久位置
+      if [[ -z "$script_path" ]]; then
+        cecho "📦 检测到临时运行模式，正在安装到永久位置..."
+        local perm_dir="$HOME/macosscript"
+        if [[ ! -d "$perm_dir" ]]; then
+          mkdir -p "$perm_dir"
+          local base_url="https://raw.githubusercontent.com/mjj0001/macosscript/main"
+          curl -fsSL --connect-timeout 10 --max-time 60 "$base_url/openclaw-macos-kejilion-rebuild.sh" -o "$perm_dir/openclaw-macos-kejilion-rebuild.sh" 2>/dev/null || {
+            curl -fsSL --connect-timeout 10 --max-time 60 "https://gh-proxy.com/$base_url/openclaw-macos-kejilion-rebuild.sh" -o "$perm_dir/openclaw-macos-kejilion-rebuild.sh" 2>/dev/null || {
+              warn "下载失败，请手动 git clone"
+              press_enter
+              return 0
+            }
+          }
+          mkdir -p "$perm_dir/lib"
+          for f in common.sh core.sh api.sh memory.sh admin.sh backup.sh bot.sh plugin.sh skill.sh; do
+            curl -fsSL --connect-timeout 10 --max-time 60 "$base_url/lib/$f" -o "$perm_dir/lib/$f" 2>/dev/null || true
+          done
+          chmod +x "$perm_dir/openclaw-macos-kejilion-rebuild.sh"
+        fi
+        script_path="$perm_dir/openclaw-macos-kejilion-rebuild.sh"
+        cecho "✅ 已安装到: $perm_dir"
+      fi
+
       local alias_line="alias ${alias_name}='${script_path}'"
 
       # 检查是否已存在
@@ -105,7 +148,13 @@ alias_manage_menu(){
           press_enter; continue
         fi
         local script_path
-        script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/openclaw-macos-kejilion-rebuild.sh"
+        script_path="$(get_permanent_script_path)"
+        # 如果在临时目录，提示需要先 git clone
+        if [[ -z "$script_path" ]]; then
+          warn "当前在临时目录运行，请先执行以下命令安装到永久位置："
+          cecho "   git clone https://github.com/mjj0001/macosscript.git ~/macosscript"
+          press_enter; continue
+        fi
         # 删除旧别名
         if [[ -f "$SCRIPT_SETTINGS_FILE" ]]; then
           local old_alias
