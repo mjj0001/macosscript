@@ -14,6 +14,12 @@ source "$SCRIPT_DIR/lib/memory.sh"
 source "$SCRIPT_DIR/lib/admin.sh"
 # shellcheck source=lib/backup.sh
 source "$SCRIPT_DIR/lib/backup.sh"
+# shellcheck source=lib/bot.sh
+source "$SCRIPT_DIR/lib/bot.sh"
+# shellcheck source=lib/plugin.sh
+source "$SCRIPT_DIR/lib/plugin.sh"
+# shellcheck source=lib/skill.sh
+source "$SCRIPT_DIR/lib/skill.sh"
 
 show_menu(){
   clear
