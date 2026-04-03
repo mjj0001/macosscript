@@ -195,22 +195,18 @@ install_launch_agent(){
   oc_bin=$(command -v "$OC_CMD" || true)
   [[ -n "$oc_bin" ]] || die "未找到 $OC_CMD 命令"
   mkdir -p "$(dirname "$LAUNCH_AGENT_PLIST")" 2>/dev/null || true
-  # 清理可能存在的旧文件（权限问题）
-  rm -f "$LAUNCH_AGENT_PLIST" 2>/dev/null || sudo rm -f "$LAUNCH_AGENT_PLIST" 2>/dev/null || true
-  # 写入 plist
-  cat > "$LAUNCH_AGENT_PLIST" <<EOF
+  # 清理可能存在的旧文件
+  rm -f "$LAUNCH_AGENT_PLIST" 2>/dev/null || true
+  # 先写到临时文件，再用 sudo 复制（避免 set -e 直接退出）
+  local tmp_plist
+  tmp_plist=$(mktemp /tmp/openclaw-plist.XXXXXX.plist)
+  cat > "$tmp_plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>Label</key><string>ai.openclaw.gateway</string><key>ProgramArguments</key><array><string>$oc_bin</string><string>gateway</string><string>start</string></array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>StandardOutPath</key><string>${OPENCLAW_HOME}/logs/launchd.out.log</string><key>StandardErrorPath</key><string>${OPENCLAW_HOME}/logs/launchd.err.log</string></dict></plist>
 EOF
-  if [[ ! -f "$LAUNCH_AGENT_PLIST" ]]; then
-    warn "写入失败，尝试使用 sudo..."
-    sudo tee "$LAUNCH_AGENT_PLIST" >/dev/null <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>Label</key><string>ai.openclaw.gateway</string><key>ProgramArguments</key><array><string>$oc_bin</string><string>gateway</string><string>start</string></array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>StandardOutPath</key><string>${OPENCLAW_HOME}/logs/launchd.out.log</string><key>StandardErrorPath</key><string>${OPENCLAW_HOME}/logs/launchd.err.log</string></dict></plist>
-EOF
-  fi
+  cp "$tmp_plist" "$LAUNCH_AGENT_PLIST" 2>/dev/null || sudo cp "$tmp_plist" "$LAUNCH_AGENT_PLIST" || { rm -f "$tmp_plist"; warn "写入 plist 失败，请检查权限"; return 1; }
+  rm -f "$tmp_plist"
   launchctl unload "$LAUNCH_AGENT_PLIST" >/dev/null 2>&1 || true
   launchctl load "$LAUNCH_AGENT_PLIST" >/dev/null 2>&1 || true
   cecho "✅ 已安装 launchctl 开机自启"
