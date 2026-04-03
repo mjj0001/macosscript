@@ -229,89 +229,53 @@ update_script(){
   cecho "脚本路径: $SCRIPT_DIR"
   echo
 
-  # 检查是否是 git 仓库
-  if [[ -d "$SCRIPT_DIR/.git" ]]; then
-    cecho "📡 正在检查更新..."
-    cd "$SCRIPT_DIR"
-    
-    # 使用后台任务和超时机制检查远程版本
-    local tmp_file="/tmp/oc_remote_ver_$$.txt"
-    (git ls-remote --heads origin main 2>/dev/null | head -1 | cut -f1) > "$tmp_file" &
-    local git_pid=$!
-    (sleep 5; kill $git_pid 2>/dev/null) &
-    local timer_pid=$!
-    wait $git_pid 2>/dev/null || true
-    kill $timer_pid 2>/dev/null || true
-    wait $timer_pid 2>/dev/null || true
-    
-    local remote_version
-    remote_version=$(cat "$tmp_file" 2>/dev/null || echo "")
-    rm -f "$tmp_file"
-    
-    local local_version
-    local_version=$(git rev-parse HEAD 2>/dev/null || echo "")
+  # 下载函数（镜像优先，失败降级直连）
+  _update_download(){
+    local url="$1" output="$2"
+    curl -fsSL --connect-timeout 10 --max-time 30 "https://gh-proxy.com/$url" -o "$output" 2>/dev/null || \
+    curl -fsSL --connect-timeout 10 --max-time 30 "$url" -o "$output" 2>/dev/null
+  }
 
-    if [[ -z "$remote_version" ]]; then
-      warn "无法连接到 GitHub 或检查超时"
-      cecho "💡 建议："
-      cecho "   1. 检查网络或配置代理"
-      cecho "   2. 使用一键安装命令覆盖更新（自动使用镜像）："
-      cecho "      bash <(curl -fsSL https://raw.githubusercontent.com/mjj0001/macosscript/main/scripts/install.sh)"
-      press_enter
-      return 0
-    fi
+  # 统一下载更新逻辑（不管是否 git 仓库都用这个，更可靠）
+  local base_url="https://raw.githubusercontent.com/mjj0001/macosscript/main"
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
 
-    if [[ "$remote_version" == "$local_version" ]]; then
-      cecho "✅ 脚本已是最新版本！"
-      press_enter
-      return 0
-    fi
+  cecho "📦 正在从 GitHub 下载最新版..."
 
-    cecho "📦 发现新版本，正在更新..."
-    git fetch origin main || {
-      warn "git fetch 失败，请检查网络"
-      cecho "💡 建议使用一键安装命令更新"
-      press_enter
-      return 0
-    }
-    git reset --hard origin/main
-    cecho "✅ 脚本已更新到最新版本！"
-    cecho "💡 建议重启脚本以应用更新"
-  else
-    # 非 git 仓库，尝试从 GitHub 下载
-    cecho "📦 正在下载最新版..."
-    local tmp_dir
-    tmp_dir=$(mktemp -d)
-    # 优先使用镜像
-    local base_url="https://gh-proxy.com/https://raw.githubusercontent.com/mjj0001/macosscript/main"
-
-    curl -fsSL --connect-timeout 5 --max-time 15 "$base_url/openclaw-macos-kejilion-rebuild.sh" -o "$tmp_dir/openclaw-macos-kejilion-rebuild.sh" 2>/dev/null || {
-      base_url="https://raw.githubusercontent.com/mjj0001/macosscript/main"
-      curl -fsSL --connect-timeout 5 --max-time 15 "$base_url/openclaw-macos-kejilion-rebuild.sh" -o "$tmp_dir/openclaw-macos-kejilion-rebuild.sh" 2>/dev/null || {
-        warn "下载失败，请检查网络"
-        rm -rf "$tmp_dir"
-        press_enter
-        return 0
-      }
-    }
-
-    # 下载 lib 文件
-    mkdir -p "$tmp_dir/lib"
-    for f in common.sh core.sh api.sh memory.sh admin.sh backup.sh bot.sh plugin.sh skill.sh logs.sh config.sh; do
-      curl -fsSL --connect-timeout 5 --max-time 15 "$base_url/lib/$f" -o "$tmp_dir/lib/$f" 2>/dev/null || true
-    done
-
-    # 复制到当前目录
-    cp -f "$tmp_dir/openclaw-macos-kejilion-rebuild.sh" "$SCRIPT_DIR/openclaw-macos-kejilion-rebuild.sh"
-    for f in "$tmp_dir/lib/"*.sh; do
-      [[ -f "$f" ]] && cp -f "$f" "$SCRIPT_DIR/lib/"
-    done
-    chmod +x "$SCRIPT_DIR/openclaw-macos-kejilion-rebuild.sh"
+  if ! _update_download "$base_url/openclaw-macos-kejilion-rebuild.sh" "$tmp_dir/openclaw-macos-kejilion-rebuild.sh"; then
+    warn "下载失败，请检查网络"
     rm -rf "$tmp_dir"
-
-    cecho "✅ 脚本已更新到最新版本！"
-    cecho "💡 建议重启脚本以应用更新"
+    press_enter
+    return 0
   fi
 
+  # 下载 lib 模块
+  mkdir -p "$tmp_dir/lib"
+  local failed=0
+  for f in common.sh core.sh api.sh memory.sh admin.sh backup.sh bot.sh plugin.sh skill.sh logs.sh config.sh; do
+    if ! _update_download "$base_url/lib/$f" "$tmp_dir/lib/$f"; then
+      warn "下载 $f 失败"
+      failed=1
+    fi
+  done
+
+  if [[ "$failed" -eq 1 ]]; then
+    warn "部分模块下载失败，已下载的已取消"
+    rm -rf "$tmp_dir"
+    press_enter
+    return 0
+  fi
+
+  # 覆盖本地文件
+  cp -f "$tmp_dir/openclaw-macos-kejilion-rebuild.sh" "$SCRIPT_DIR/openclaw-macos-kejilion-rebuild.sh"
+  for f in "$tmp_dir/lib/"*.sh; do
+    [[ -f "$f" ]] && cp -f "$f" "$SCRIPT_DIR/lib/"
+  done
+  chmod +x "$SCRIPT_DIR/openclaw-macos-kejilion-rebuild.sh"
+  rm -rf "$tmp_dir"
+
+  cecho "✅ 脚本已更新到最新版本！"
+  cecho "💡 请退出并重新运行脚本以应用更新"
   press_enter
 }
