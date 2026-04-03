@@ -92,7 +92,7 @@ config_diff(){
   step "配置对比"
   [[ -f "$OPENCLAW_CONFIG_FILE" ]] || { warn "当前配置文件不存在"; return 0; }
   local backups
-  backups=$(ls -1t "$BACKUP_DIR"/config-*.json 2>/dev/null | head -5)
+  backups=$(ls -1t "$BACKUP_DIR"/config-export-*.json "$BACKUP_DIR"/config-pre-import-*.json 2>/dev/null | head -5)
   if [[ -z "$backups" ]]; then
     warn "没有可用的备份文件进行对比"
     press_enter

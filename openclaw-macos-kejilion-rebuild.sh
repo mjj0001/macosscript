@@ -86,8 +86,9 @@ show_menu(){
   cecho "23. 安装开机自启"
   cecho "24. 移除开机自启"
   cecho "25. 快捷别名设置"
-  cecho "26. 更新脚本自身"
-  cecho "0.  退出"
+cecho "26. 更新脚本自身"
+cecho "27. 日志管理"
+cecho "0.  退出"
   cecho "--------------------"
 }
 
@@ -127,6 +128,7 @@ main(){
       24) remove_launch_agent; press_enter ;;
       25) alias_manage_menu ;;
       26) update_script ;;
+      27) log_manage_menu ;;
       0) exit 0 ;;
       *) warn "无效选项"; sleep 1 ;;
     esac

@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="OpenClaw"
-SCRIPT_VERSION="v0.3.1-modular"
+SCRIPT_VERSION="v0.3.2-bugfix"
 OPENCLAW_NPM_PACKAGE="openclaw@latest"
 OPENCLAW_HOME="${HOME}/.openclaw"
 OPENCLAW_CONFIG_FILE="${OPENCLAW_HOME}/openclaw.json"
@@ -17,13 +17,14 @@ SCRIPT_SETTINGS_FILE="${HOME}/.openclaw-macos-script-settings"
 # 自动检测 CLI 命令名（openclaw 或 clawd）
 OC_CMD=""
 detect_oc_cmd(){
-  if [[ -n "$OC_CMD" ]]; then return 0; fi
+  if [[ -n "$OC_CMD" ]]; then
+    if command -v "$OC_CMD" >/dev/null 2>&1; then return 0; fi
+    OC_CMD=""
+  fi
   if command -v openclaw >/dev/null 2>&1; then
     OC_CMD="openclaw"
   elif command -v clawd >/dev/null 2>&1; then
     OC_CMD="clawd"
-  else
-    OC_CMD="openclaw"
   fi
 }
 
@@ -38,7 +39,7 @@ trap 'rc=$?; if [ $rc -ne 0 ]; then printf "\n❌ 失败步骤：%s\n" "$LAST_ER
 # --- 获取永久脚本路径 ---
 get_permanent_script_path(){
   local current_dir
-  current_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  current_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   # 判断是否在临时目录（/var/folders 或 /tmp 开头）
   if [[ "$current_dir" == /var/folders/* || "$current_dir" == /tmp/* ]]; then
     # 需要安装到永久位置
@@ -174,8 +175,8 @@ alias_manage_menu(){
           local old_alias
           old_alias=$(grep "^alias=" "$SCRIPT_SETTINGS_FILE" 2>/dev/null | cut -d= -f2)
           if [[ -n "$old_alias" ]]; then
-            sed -i '' "/alias ${old_alias}=/d" ~/.zshrc 2>/dev/null || true
-            sed -i '' "/# OpenClaw macOS 管理工具快捷启动/d" ~/.zshrc 2>/dev/null || true
+            sed -i '' "/^alias ${old_alias}=/d" ~/.zshrc 2>/dev/null || true
+            sed -i '' "/^# OpenClaw macOS 管理工具快捷启动$/d" ~/.zshrc 2>/dev/null || true
           fi
         fi
         # 添加新别名
@@ -193,8 +194,8 @@ alias_manage_menu(){
           local old_alias
           old_alias=$(grep "^alias=" "$SCRIPT_SETTINGS_FILE" 2>/dev/null | cut -d= -f2)
           if [[ -n "$old_alias" ]]; then
-            sed -i '' "/alias ${old_alias}=/d" ~/.zshrc 2>/dev/null || true
-            sed -i '' "/# OpenClaw macOS 管理工具快捷启动/d" ~/.zshrc 2>/dev/null || true
+            sed -i '' "/^alias ${old_alias}=/d" ~/.zshrc 2>/dev/null || true
+            sed -i '' "/^# OpenClaw macOS 管理工具快捷启动$/d" ~/.zshrc 2>/dev/null || true
             source ~/.zshrc 2>/dev/null || true
             rm -f "$SCRIPT_SETTINGS_FILE"
             cecho "✅ 已删除别名 '${old_alias}'"
@@ -215,9 +216,9 @@ alias_manage_menu(){
 ensure_macos(){ step "检查系统"; if [[ "$TEST_MODE" == "1" ]]; then return 0; fi; [[ "$(uname -s)" == "Darwin" ]] || die "这个脚本只支持 macOS。"; }
 load_brew_env(){ [[ -x /opt/homebrew/bin/brew ]] && eval "$(/opt/homebrew/bin/brew shellenv)" || true; [[ -x /usr/local/bin/brew ]] && eval "$(/usr/local/bin/brew shellenv)" || true; }
 ensure_xcode_clt(){ step "检查 Xcode CLT"; xcode-select -p >/dev/null 2>&1 || { xcode-select --install || true; die "请先安装 Xcode Command Line Tools。"; }; }
-ensure_homebrew(){ step "检查 Homebrew"; command -v brew >/dev/null 2>&1 || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; load_brew_env; need_cmd brew; }
+ensure_homebrew(){ step "检查 Homebrew"; if command -v brew >/dev/null 2>&1; then return 0; fi; cecho "🍺 Homebrew 未安装，开始安装..."; cecho "💡 安装过程可能需要几分钟，请耐心等待"; if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then load_brew_env; need_cmd brew; cecho "✅ Homebrew 安装成功"; else warn "Homebrew 安装失败"; cecho "💡 请手动安装: https://brew.sh"; return 1; fi; }
 install_dependencies(){ step "安装依赖"; brew update; brew install git jq node python tmux coreutils gnu-tar sqlite || true; }
-configure_npm_registry_if_needed(){ step "配置 npm 镜像"; local c=""; c=$(curl -fsSL --max-time 3 ipinfo.io/country 2>/dev/null || true); [[ "$c" == "CN" || "$c" == "HK" ]] && npm config set registry https://registry.npmmirror.com || true; }
+configure_npm_registry_if_needed(){ step "配置 npm 镜像"; local c=""; c=$(curl -fsSL --max-time 5 https://myip.ipip.net 2>/dev/null | grep -oP '位于.*?([A-Z]+)' | grep -oP '[A-Z]+' || true); if [[ -z "$c" ]]; then c=$(curl -fsSL --max-time 3 https://ipinfo.io/country 2>/dev/null || true); fi; if [[ "$c" == "CN" ]]; then npm config set registry https://registry.npmmirror.com; cecho "✅ 已配置 npm 镜像 (npmmirror)"; fi; }
 ensure_openclaw_dirs(){ step "创建目录"; mkdir -p "$OPENCLAW_HOME" "$WORKSPACE_DIR" "$BACKUP_DIR" "$OPENCLAW_HOME/logs" "$(dirname "$LAUNCH_AGENT_PLIST")"; }
 ensure_openclaw_config(){ step "准备配置文件"; ensure_openclaw_dirs; [[ -f "$OPENCLAW_CONFIG_FILE" ]] || printf '{}\n' > "$OPENCLAW_CONFIG_FILE"; }
 

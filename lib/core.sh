@@ -82,7 +82,7 @@ PY
   cecho "✅ 已更新 OpenClaw"
   press_enter
 }
-uninstall_openclaw(){ step "卸载 OpenClaw"; detect_oc_cmd; read -r -p "确认卸载输入 yes：" y; [[ "$y" == "yes" ]] || return 0; remove_launch_agent || true; $OC_CMD uninstall >/dev/null 2>&1 || true; npm uninstall -g openclaw >/dev/null 2>&1 || true; cecho "✅ 已卸载 npm 包，配置目录保留：$OPENCLAW_HOME"; press_enter; }
+uninstall_openclaw(){ step "卸载 OpenClaw"; detect_oc_cmd; read -r -p "确认卸载输入 yes：" y; [[ "$y" == "yes" ]] || return 0; remove_launch_agent || true; $OC_CMD uninstall >/dev/null 2>&1 || true; npm uninstall -g openclaw >/dev/null 2>&1 || true; OC_CMD=""; cecho "✅ 已卸载 npm 包，配置目录保留：$OPENCLAW_HOME"; press_enter; }
 
 # --- 版本回滚 ---
 rollback_openclaw(){
@@ -205,7 +205,7 @@ install_launch_agent(){
 EOF
   if [[ ! -f "$LAUNCH_AGENT_PLIST" ]]; then
     warn "写入失败，尝试使用 sudo..."
-    sudo bash -c "cat > '$LAUNCH_AGENT_PLIST'" <<EOF
+    sudo tee "$LAUNCH_AGENT_PLIST" >/dev/null <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>Label</key><string>ai.openclaw.gateway</string><key>ProgramArguments</key><array><string>$oc_bin</string><string>gateway</string><string>start</string></array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>StandardOutPath</key><string>${OPENCLAW_HOME}/logs/launchd.out.log</string><key>StandardErrorPath</key><string>${OPENCLAW_HOME}/logs/launchd.err.log</string></dict></plist>
